@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35828.75 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MQBroker", "MQBroker\MQBroker.csproj", "{D6190AE9-5D7B-468B-9438-A8F2CD565790}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D6190AE9-5D7B-468B-9438-A8F2CD565790}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D6190AE9-5D7B-468B-9438-A8F2CD565790}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D6190AE9-5D7B-468B-9438-A8F2CD565790}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D6190AE9-5D7B-468B-9438-A8F2CD565790}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3DA3E523-80E9-4CE0-A861-FE7B0EF193FA}
+	EndGlobalSection
+EndGlobal
