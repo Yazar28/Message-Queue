@@ -2,7 +2,9 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json;
+using MQBroker.Models;
+using MQBroker.Services;
 
 namespace MQBroker.Networking
 {
@@ -10,21 +12,24 @@ namespace MQBroker.Networking
     {
         private TcpListener server;
         private const int Port = 5000;
+        private readonly SubscriptionService subscriptionService;
+        private readonly bool debugMode = true;
 
         public BrokerServer()
         {
             server = new TcpListener(IPAddress.Any, Port);
+            subscriptionService = new SubscriptionService();
         }
 
         public void Start()
         {
             server.Start();
-            Console.WriteLine($"Server started on port {Port}...");
+            Console.WriteLine($"Servidor iniciado en el puerto {Port}...");
 
             while (true)
             {
                 TcpClient client = server.AcceptTcpClient();
-                Console.WriteLine("Client connected...");
+                Console.WriteLine("Cliente conectado...");
                 Task.Run(() => HandleClient(client));
             }
         }
@@ -35,29 +40,69 @@ namespace MQBroker.Networking
             {
                 NetworkStream stream = client.GetStream();
                 byte[] buffer = new byte[1024];
-                int bytesRead;
-                StringBuilder receivedMessage = new StringBuilder();
+                int bytesRead = stream.Read(buffer, 0, buffer.Length);
 
-                while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+                // Verificar si el cliente se desconectó sin enviar datos
+                if (bytesRead == 0)
                 {
-                    string data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    receivedMessage.Append(data);
-
-                    if (data.Contains("\n") || data.Contains("\r"))
-                    {
-                        break;
-                    }
+                    Console.WriteLine("Cliente desconectado sin enviar datos.");
+                    return;
                 }
 
-                string finalMessage = receivedMessage.ToString().Trim(); 
-                Console.WriteLine($"Mensaje recibido: {finalMessage}");
-               
+                string requestJson = Encoding.UTF8.GetString(buffer, 0, bytesRead);
 
-                string response = "Mensaje recibido correctamente.";
+                if (debugMode)
+                {
+                    Console.WriteLine($"Mensaje recibido RAW: [{requestJson}]");
+                }
+                else
+                {
+                    Console.WriteLine($"Mensaje recibido: {requestJson}");
+                }
+
+                Message? message;
+                try
+                {
+                    message = JsonSerializer.Deserialize<Message>(requestJson);
+                }
+                catch (JsonException ex)
+                {
+                    Console.WriteLine($"Error de deserialización: {ex.Message}");
+                    Console.WriteLine($"JSON defectuoso: {requestJson}"); // Mostrar JSON incorrecto
+                    message = null;
+                }
+
+                string response;
+
+                if (message != null)
+                {
+                    switch (message.Type.ToLower())
+                    {
+                        case "subscribe":
+                            subscriptionService.Subscribe(message.AppId);
+                            response = $"Usuario {message.AppId} suscrito al tema {message.Topic}.";
+                            break;
+                        case "unsubscribe":
+                            subscriptionService.Unsubscribe(message.AppId);
+                            response = $"Usuario {message.AppId} eliminado del tema {message.Topic}.";
+                            break;
+                        default:
+                            response = "Tipo de mensaje no soportado.";
+                            break;
+                    }
+                }
+                else
+                {
+                    response = "Error: JSON no válido.";
+                }
+
                 byte[] responseData = Encoding.UTF8.GetBytes(response);
                 stream.Write(responseData, 0, responseData.Length);
 
-                client.Close(); 
+                // Imprimir la respuesta enviada al cliente
+                Console.WriteLine($"Respuesta enviada: {response}");
+
+                client.Close();
             }
             catch (Exception ex)
             {
