@@ -51,6 +51,7 @@ namespace MQBroker.Networking
 
                 string finalMessage = receivedMessage.ToString().Trim(); 
                 Console.WriteLine($"Mensaje recibido: {finalMessage}");
+                Console.WriteLine("");
 
                 string response = "Mensaje recibido correctamente.";
                 byte[] responseData = Encoding.UTF8.GetBytes(response);
