@@ -42,7 +42,6 @@ namespace MQBroker.Networking
                 byte[] buffer = new byte[1024];
                 int bytesRead = stream.Read(buffer, 0, buffer.Length);
 
-                // Verificar si el cliente se desconectó sin enviar datos
                 if (bytesRead == 0)
                 {
                     Console.WriteLine("Cliente desconectado sin enviar datos.");
@@ -68,7 +67,7 @@ namespace MQBroker.Networking
                 catch (JsonException ex)
                 {
                     Console.WriteLine($"Error de deserialización: {ex.Message}");
-                    Console.WriteLine($"JSON defectuoso: {requestJson}"); // Mostrar JSON incorrecto
+                    Console.WriteLine($"JSON defectuoso: {requestJson}"); 
                     message = null;
                 }
 
@@ -79,12 +78,15 @@ namespace MQBroker.Networking
                     switch (message.Type.ToLower())
                     {
                         case "subscribe":
-                            subscriptionService.Subscribe(message.AppId);
+                            subscriptionService.Subscribe(message.AppId, message.Topic);
                             response = $"Usuario {message.AppId} suscrito al tema {message.Topic}.";
                             break;
                         case "unsubscribe":
-                            subscriptionService.Unsubscribe(message.AppId);
+                            subscriptionService.Unsubscribe(message.AppId, message.Topic);
                             response = $"Usuario {message.AppId} eliminado del tema {message.Topic}.";
+                            break;
+                        case "publish":
+                            response = HandlePublish(message);
                             break;
                         default:
                             response = "Tipo de mensaje no soportado.";
@@ -99,7 +101,6 @@ namespace MQBroker.Networking
                 byte[] responseData = Encoding.UTF8.GetBytes(response);
                 stream.Write(responseData, 0, responseData.Length);
 
-                // Imprimir la respuesta enviada al cliente
                 Console.WriteLine($"Respuesta enviada: {response}");
 
                 client.Close();
@@ -108,6 +109,36 @@ namespace MQBroker.Networking
             {
                 Console.WriteLine($"Error al manejar cliente: {ex.Message}");
             }
+        }
+
+        private string HandlePublish(Message message)
+        {
+            bool topicExists = subscriptionService.IsSubscribed(message.AppId,message.Topic);
+            if (!topicExists)
+            {
+                return $"El tema {message.Topic} no tiene suscriptores o no existe.";
+            }
+
+            var subscribers = subscriptionService.GetSubscribersByTopic(message.Topic);
+
+            foreach (var subscriber in subscribers)
+            {
+                NodoSuscriptor? actual = subscriptionService.GetSubscriber(subscriber);
+
+                if (actual != null)
+                {
+                    if (message.Content != null)
+                    {
+                        actual.MessagesQueue.Enqueue(message.Content);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Mensaje publicado a {subscriber} en el tema {message.Topic}.");
+                    }
+                }
+            }
+
+            return $"Mensaje publicado en el tema {message.Topic}.";
         }
     }
 }
