@@ -88,6 +88,9 @@ namespace MQBroker.Networking
                         case "publish":
                             response = HandlePublish(message);
                             break;
+                        case "receive":
+                            response = HandleReceive(message);
+                            break;
                         default:
                             response = "Tipo de mensaje no soportado.";
                             break;
@@ -139,6 +142,28 @@ namespace MQBroker.Networking
             }
 
             return $"Mensaje publicado en el tema {message.Topic}.";
+        }
+
+        private string HandleReceive(Message message)
+        {
+            var subscribers = subscriptionService.GetSubscribersByTopic(message.Topic);
+
+            if (!subscribers.Contains(message.AppId))
+            {
+                return $"El usuario {message.AppId} no está suscrito al tema {message.Topic}.";
+            }
+
+            NodoSuscriptor? actual = subscriptionService.GetSubscriber(message.AppId);
+
+            if (actual != null && actual.MessagesQueue.Count > 0)
+            {
+                var receivedMessage = actual.MessagesQueue.Dequeue();
+                return $"Mensaje recibido por {message.AppId} del tema {message.Topic}: {receivedMessage}";
+            }
+            else 
+            {
+                return $"No hay mensajes pendientes para {message.AppId} en el tema {message.Topic}.";
+            }
         }
     }
 }
