@@ -5,16 +5,16 @@ namespace MQBroker.Models
     public class Message
     {
         [JsonPropertyName("type")]
-        public string Type { get; }
+        public required string Type { get; init; }
 
         [JsonPropertyName("appId")]
-        public string AppId { get; }
+        public required string AppId { get; init; }
 
         [JsonPropertyName("topic")]
-        public string Topic { get; }
+        public required string Topic { get; init; }
 
         [JsonPropertyName("content")]
-        public string? Content { get; }
+        public string? Content { get; init; }
 
         [JsonConstructor]
         public Message(string type, string appId, string topic, string? content = null)
@@ -26,8 +26,7 @@ namespace MQBroker.Models
         }
 
         public Message(string type, string appId, string topic)
-            : this(type, appId, topic, null) 
+            : this(type, appId, topic, null)
         { }
     }
-
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text.Json;
 using System.IO;
+using System.Collections.Generic;   
 
 namespace MQBroker.Services
 {
@@ -26,36 +27,27 @@ namespace MQBroker.Services
     public class DataPersistence
     {
         private static readonly string filePath = @"C:\Users\Usuario\OneDrive\Desktop\Programación\Algoritmo y Estructuras de Datos\Proyecto#1\MQBroker\Data\data.json";
+        private static string FilePath => filePath;
 
         public static void SaveData(DataStorage data)
         {
             try
             {
-                string? directory = Path.GetDirectoryName(filePath);
+                string? directory = Path.GetDirectoryName(FilePath);
 
-                if (!string.IsNullOrEmpty(directory))
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {
-                    Console.WriteLine($"Ruta donde se intenta guardar el archivo: {directory}");
-
-                    if (!Directory.Exists(directory))
-                    {
-                        Directory.CreateDirectory(directory);
-                        Console.WriteLine("Carpeta creada correctamente.");
-                    }
+                    Directory.CreateDirectory(directory);
                 }
-                else
-                {
-                    Console.WriteLine("Error: La ruta del archivo no es válida.");
-                    return;
-                }
-
-                string json = JsonSerializer.Serialize(data);
-                File.WriteAllText(filePath, json);
-                Console.WriteLine("Datos guardados correctamente.");
+                File.WriteAllText(FilePath, JsonSerializer.Serialize(data));
+            }
+            catch (IOException ioEx)
+            {
+                Console.WriteLine($"Error de E/S al guardar datos: {ioEx.Message}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error al guardar datos: {ex.Message}");
+                Console.WriteLine($"Error general al guardar datos: {ex.Message}");
             }
         }
 
@@ -63,22 +55,26 @@ namespace MQBroker.Services
         {
             try
             {
-                if (!File.Exists(filePath))
-                {
-                    Console.WriteLine("No se encontró el archivo, creando nuevo.");
-                    return new DataStorage();
-                }
-
-                string json = File.ReadAllText(filePath);
-                Console.WriteLine("Datos cargados correctamente.");
-                return JsonSerializer.Deserialize<DataStorage>(json) ?? new DataStorage();
+                if (!File.Exists(FilePath)) return new DataStorage();
+                return JsonSerializer.Deserialize<DataStorage>(File.ReadAllText(FilePath)) ?? new DataStorage();
+            }
+            catch (IOException ioEx)
+            {
+                Console.WriteLine($"Error de E/S al cargar datos: {ioEx.Message}");
+                return new DataStorage();
+            }
+            catch (JsonException jsonEx)
+            {
+                Console.WriteLine($"Error de JSON al cargar datos: {jsonEx.Message}");
+                return new DataStorage();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error al cargar datos: {ex.Message}");
-                return new DataStorage(); 
+                Console.WriteLine($"Error general al cargar datos: {ex.Message}");
+                return new DataStorage();
             }
         }
+    
     }
     public class SubscriptionService
     {
@@ -97,141 +93,83 @@ namespace MQBroker.Services
                 return null;
             }
 
-            NodoSuscriptor? cabeza = null;
-            NodoSuscriptor? actual = null;
-
+            NodoSuscriptor? cabeza = null, actual = null;
             foreach (var subscriber in subscribers)
             {
-                var newMode = new NodoSuscriptor(subscriber.AppId);
+                var nuevo = new NodoSuscriptor(subscriber.AppId)
+                {
+                    SubscribedTopics = new List<string>(subscriber.SubscribedTopics)
+                };
 
-                if (cabeza == null)
-                {
-                    cabeza = newMode;
-                    actual = cabeza;
-                }
-                else
-                {
-                    if (actual != null)
-                    {
-                        actual.Siguiente = newMode;
-                    }
-                    actual = newMode;
-                }
+                if (actual == null) cabeza = actual = nuevo;
+                else actual = actual.Siguiente = nuevo;
             }
             return cabeza;
         }
 
-        public bool IsTopicSubscribed(string appId, string topic)
+        public void Subscribe(string appId, string topic)
         {
-            NodoSuscriptor? actual = cabeza;
+            NodoSuscriptor? suscriptor = GetSubscriber(appId);
+            if (suscriptor != null)
+            {
+                if (suscriptor.SubscribedTopics.Contains(topic))
+                {
+                    Console.WriteLine($"El usuario {appId} ya está suscrito al tema {topic}.");
+                    return;
+                }
+                suscriptor.SubscribedTopics.Add(topic);
+            }
+            else
+            {
+                cabeza = new NodoSuscriptor(appId, cabeza);
+                cabeza.SubscribedTopics.Add(topic);
+            }
+            DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
+        }
+
+        public void Unsubscribe(string appId, string topic)
+        {
+            NodoSuscriptor? actual = cabeza, anterior = null;
             while (actual != null)
             {
-                if (actual.AppId == appId && actual.SubscribedTopics.Contains(topic))
+                if (actual.AppId == appId)
                 {
-                    return true;
+                    if (!actual.SubscribedTopics.Contains(topic))
+                    {
+                        Console.WriteLine($"El usuario {appId} no está suscrito al tema {topic}.");
+                        return;
+                    }
+                    actual.SubscribedTopics.Remove(topic);
+                    if (actual.SubscribedTopics.Count == 0)
+                    {
+                        if (anterior == null) cabeza = actual.Siguiente;
+                        else anterior.Siguiente = actual.Siguiente;
+                    }
+                    DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
+                    return;
                 }
+                anterior = actual;
                 actual = actual.Siguiente;
             }
-            return false;
         }
 
         public List<string> GetSubscribersByTopic(string topic)
         {
             List<string> subscribers = new List<string>();
             NodoSuscriptor? actual = cabeza;
-
             while (actual != null)
             {
                 if (actual.SubscribedTopics.Contains(topic))
-                {
                     subscribers.Add(actual.AppId);
-                }
                 actual = actual.Siguiente;
             }
             return subscribers;
         }
 
-        public void Subscribe(string appId, string topic)
-        {
-            if (IsSubscribed(appId, topic))
-            {
-                Console.WriteLine($"Usuario {appId} ya está suscrito al tema {topic}.");
-                return;
-            }
-
-            var nuevo = new NodoSuscriptor(appId) { Siguiente = cabeza };
-            cabeza = nuevo;
-            nuevo.SubscribedTopics.Add(topic);
-            DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
-            Console.WriteLine($"Usuario {appId} se ha suscrito al tema {topic} correctamente.");
-        }
-
-        public void Unsubscribe(string appId, string topic)
-        {
-           if (cabeza == null)
-           {
-                Console.WriteLine($"Usuario {appId} no está suscrito.");
-                return;
-           }
-
-           NodoSuscriptor? actual = cabeza;
-            while (actual != null)
-            {
-                if (actual.AppId == appId)
-                {
-                    if (actual.SubscribedTopics.Contains(topic))
-                    {
-                        actual.SubscribedTopics.Remove(topic);
-                        Console.WriteLine($"Usuario {appId} se ha desuscrito del tema {topic}.");
-
-                        if (actual.SubscribedTopics.Count == 0)
-                        {
-                            if (cabeza == actual)
-                            {
-                                cabeza = actual.Siguiente;
-                            }
-                            else
-                            {
-                                NodoSuscriptor? anterior = cabeza;
-                                while (anterior?.Siguiente != actual)
-                                {
-                                    anterior = anterior?.Siguiente;
-                                }
-
-                                if (anterior != null)
-                                {
-                                    anterior.Siguiente = actual.Siguiente;
-                                }
-                            }
-                            Console.WriteLine($"Usuario {appId} ha sido completamente eliminado, ya no tiene temas.");
-                        }
-                        DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
-                        return;
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Usuario {appId} no está suscrito al tema {topic}.");
-                        return;
-                    }
-                }
-                actual = actual.Siguiente;
-            }
-            DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
-            Console.WriteLine($"Usuario {appId} no está suscrito.");    
-        }
-
         public bool IsSubscribed(string appId, string topic)
         {
-            NodoSuscriptor? actual = cabeza;
-            while (actual != null)
-            {
-                if (actual.AppId == appId && actual.SubscribedTopics.Contains(topic))
-                {
-                    return true;
-                }
-                actual = actual.Siguiente;
-            }
-            return false;
+            NodoSuscriptor? suscriptor = GetSubscriber(appId);
+            return suscriptor != null && suscriptor.SubscribedTopics.Contains(topic);
         }
 
         public void Publish(string topic, string messageContent)
