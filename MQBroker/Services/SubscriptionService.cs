@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Text.Json;
+using System.IO;
 
 namespace MQBroker.Services
 {
@@ -16,9 +18,108 @@ namespace MQBroker.Services
         }
     }
 
+    public class DataStorage
+    {
+        public List<NodoSuscriptor> Suscriptores { get; set; } = new List<NodoSuscriptor>();
+    }
+
+    public class DataPersistence
+    {
+        private static readonly string filePath = @"C:\Users\Usuario\OneDrive\Desktop\Programación\Algoritmo y Estructuras de Datos\Proyecto#1\MQBroker\Data\data.json";
+
+        public static void SaveData(DataStorage data)
+        {
+            try
+            {
+                string? directory = Path.GetDirectoryName(filePath);
+
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    Console.WriteLine($"Ruta donde se intenta guardar el archivo: {directory}");
+
+                    if (!Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                        Console.WriteLine("Carpeta creada correctamente.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Error: La ruta del archivo no es válida.");
+                    return;
+                }
+
+                string json = JsonSerializer.Serialize(data);
+                File.WriteAllText(filePath, json);
+                Console.WriteLine("Datos guardados correctamente.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al guardar datos: {ex.Message}");
+            }
+        }
+
+        public static DataStorage LoadData()
+        {
+            try
+            {
+                if (!File.Exists(filePath))
+                {
+                    Console.WriteLine("No se encontró el archivo, creando nuevo.");
+                    return new DataStorage();
+                }
+
+                string json = File.ReadAllText(filePath);
+                Console.WriteLine("Datos cargados correctamente.");
+                return JsonSerializer.Deserialize<DataStorage>(json) ?? new DataStorage();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al cargar datos: {ex.Message}");
+                return new DataStorage(); 
+            }
+        }
+    }
     public class SubscriptionService
     {
         private NodoSuscriptor? cabeza;
+
+        public SubscriptionService()
+        {
+            var data = DataPersistence.LoadData();
+            cabeza = CreateLinkedListFromStorage(data.Suscriptores);
+        }
+
+        private NodoSuscriptor? CreateLinkedListFromStorage(List<NodoSuscriptor> subscribers)
+        {
+            if (subscribers == null || subscribers.Count == 0)
+            {
+                return null;
+            }
+
+            NodoSuscriptor? cabeza = null;
+            NodoSuscriptor? actual = null;
+
+            foreach (var subscriber in subscribers)
+            {
+                var newMode = new NodoSuscriptor(subscriber.AppId);
+
+                if (cabeza == null)
+                {
+                    cabeza = newMode;
+                    actual = cabeza;
+                }
+                else
+                {
+                    if (actual != null)
+                    {
+                        actual.Siguiente = newMode;
+                    }
+                    actual = newMode;
+                }
+            }
+            return cabeza;
+        }
 
         public bool IsTopicSubscribed(string appId, string topic)
         {
@@ -60,9 +161,8 @@ namespace MQBroker.Services
 
             var nuevo = new NodoSuscriptor(appId) { Siguiente = cabeza };
             cabeza = nuevo;
-
             nuevo.SubscribedTopics.Add(topic);
-
+            DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
             Console.WriteLine($"Usuario {appId} se ha suscrito al tema {topic} correctamente.");
         }
 
@@ -105,6 +205,7 @@ namespace MQBroker.Services
                             }
                             Console.WriteLine($"Usuario {appId} ha sido completamente eliminado, ya no tiene temas.");
                         }
+                        DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
                         return;
                     }
                     else
@@ -115,6 +216,7 @@ namespace MQBroker.Services
                 }
                 actual = actual.Siguiente;
             }
+            DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
             Console.WriteLine($"Usuario {appId} no está suscrito.");    
         }
 
@@ -123,7 +225,7 @@ namespace MQBroker.Services
             NodoSuscriptor? actual = cabeza;
             while (actual != null)
             {
-                if (actual.AppId == appId)
+                if (actual.AppId == appId && actual.SubscribedTopics.Contains(topic))
                 {
                     return true;
                 }
@@ -164,6 +266,18 @@ namespace MQBroker.Services
                 actual = actual.Siguiente;
             }
             return null;
+        }
+
+        public List<NodoSuscriptor> GetAllSubscribers()
+        {
+            var subscribers = new List<NodoSuscriptor>();
+            NodoSuscriptor? actual = cabeza;
+            while (actual != null)
+            {
+                subscribers.Add(actual);
+                actual = actual.Siguiente;
+            }
+            return subscribers;
         }
     }
 }

@@ -116,7 +116,7 @@ namespace MQBroker.Networking
 
         private string HandlePublish(Message message)
         {
-            bool topicExists = subscriptionService.IsSubscribed(message.AppId,message.Topic);
+            bool topicExists = subscriptionService.IsSubscribed(message.AppId, message.Topic);
             if (!topicExists)
             {
                 return $"El tema {message.Topic} no tiene suscriptores o no existe.";
@@ -127,19 +127,26 @@ namespace MQBroker.Networking
             foreach (var subscriber in subscribers)
             {
                 NodoSuscriptor? actual = subscriptionService.GetSubscriber(subscriber);
-
-                if (actual != null)
+                while (actual != null)
                 {
-                    if (message.Content != null)
+                    if (actual.AppId == subscriber)
                     {
-                        actual.MessagesQueue.Enqueue(message.Content);
+                        if (message.Content != null)
+                        {
+                            actual.MessagesQueue.Enqueue(message.Content);
+                            Console.WriteLine($"Mensaje publicado a {subscriber} en el tema {message.Topic}.");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Mensaje vacío publicado a {subscriber} en el tema {message.Topic}.");
+                        }
+                        break;
                     }
-                    else
-                    {
-                        Console.WriteLine($"Mensaje publicado a {subscriber} en el tema {message.Topic}.");
-                    }
+                    actual = actual.Siguiente;
                 }
             }
+
+            DataPersistence.SaveData(new DataStorage { Suscriptores = subscriptionService.GetAllSubscribers() });
 
             return $"Mensaje publicado en el tema {message.Topic}.";
         }
@@ -158,9 +165,13 @@ namespace MQBroker.Networking
             if (actual != null && actual.MessagesQueue.Count > 0)
             {
                 var receivedMessage = actual.MessagesQueue.Dequeue();
+                Console.WriteLine($"Mensaje recibido por {message.AppId} del tema {message.Topic}: {receivedMessage}");
+
+                DataPersistence.SaveData(new DataStorage { Suscriptores = subscriptionService.GetAllSubscribers() });
+
                 return $"Mensaje recibido por {message.AppId} del tema {message.Topic}: {receivedMessage}";
             }
-            else 
+            else
             {
                 return $"No hay mensajes pendientes para {message.AppId} en el tema {message.Topic}.";
             }
