@@ -13,7 +13,7 @@ namespace MQBroker.Networking
         private TcpListener server;
         private const int Port = 5000;
         private readonly SubscriptionService subscriptionService;
-        private readonly bool debugMode = true;
+        private static readonly bool debugMode = true; 
 
         public BrokerServer()
         {
@@ -29,7 +29,7 @@ namespace MQBroker.Networking
             while (true)
             {
                 TcpClient client = server.AcceptTcpClient();
-                Console.WriteLine("Cliente conectado...");
+                if (debugMode) Console.WriteLine("Cliente conectado...");
                 Task.Run(() => HandleClient(client));
             }
         }
@@ -44,20 +44,12 @@ namespace MQBroker.Networking
 
                 if (bytesRead == 0)
                 {
-                    Console.WriteLine("Cliente desconectado sin enviar datos.");
+                    if (debugMode) Console.WriteLine("Cliente desconectado sin enviar datos.");
                     return;
                 }
 
                 string requestJson = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-
-                if (debugMode)
-                {
-                    Console.WriteLine($"Mensaje recibido RAW: [{requestJson}]");
-                }
-                else
-                {
-                    Console.WriteLine($"Mensaje recibido: {requestJson}");
-                }
+                if (debugMode) Console.WriteLine($"Mensaje recibido: {requestJson}");
 
                 Message? message;
                 try
@@ -66,109 +58,94 @@ namespace MQBroker.Networking
                 }
                 catch (JsonException ex)
                 {
-                    Console.WriteLine($"Error de deserialización: {ex.Message}");
-                    Console.WriteLine($"JSON defectuoso: {requestJson}"); 
+                    if (debugMode) Console.WriteLine($"Error de deserialización: {ex.Message}\nJSON defectuoso: {requestJson}");
                     message = null;
                 }
 
-                string response;
-
-                if (message != null)
-                {
-                    switch (message.Type.ToLower())
-                    {
-                        case "subscribe":
-                            subscriptionService.Subscribe(message.AppId, message.Topic);
-                            response = $"Usuario {message.AppId} suscrito al tema {message.Topic}.";
-                            break;
-                        case "unsubscribe":
-                            subscriptionService.Unsubscribe(message.AppId, message.Topic);
-                            response = $"Usuario {message.AppId} eliminado del tema {message.Topic}.";
-                            break;
-                        case "publish":
-                            response = HandlePublish(message);
-                            break;
-                        case "receive":
-                            response = HandleReceive(message);
-                            break;
-                        default:
-                            response = "Tipo de mensaje no soportado.";
-                            break;
-                    }
-                }
-                else
-                {
-                    response = "Error: JSON no válido.";
-                }
-
+                string response = message != null ? ProcessMessage(message) : "Error: JSON no válido.";
                 byte[] responseData = Encoding.UTF8.GetBytes(response);
                 stream.Write(responseData, 0, responseData.Length);
 
-                Console.WriteLine($"Respuesta enviada: {response}");
+                if (debugMode) Console.WriteLine($"Respuesta enviada: {response}");
 
                 client.Close();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error al manejar cliente: {ex.Message}");
+                if (debugMode) Console.WriteLine($"Error al manejar cliente: {ex.Message}");
             }
+        }
+
+        private string ProcessMessage(Message message)
+        {
+            return message.Type.ToLower() switch
+            {
+                "subscribe" => HandleSubscribe(message),
+                "unsubscribe" => HandleUnsubscribe(message),
+                "publish" => HandlePublish(message),
+                "receive" => HandleReceive(message),
+                _ => "Tipo de mensaje no soportado."
+            };
+        }
+
+        private string HandleSubscribe(Message message)
+        {
+            bool wasAlreadySubscribed = subscriptionService.IsSubscribed(message.AppId, message.Topic);
+
+            subscriptionService.Subscribe(message.AppId, message.Topic);
+
+            return wasAlreadySubscribed
+                ? $"El usuario {message.AppId} ya estaba suscrito al tema {message.Topic}."
+                : $"Usuario {message.AppId} suscrito al tema {message.Topic}.";
+        }
+
+        private string HandleUnsubscribe(Message message)
+        {
+            bool wasSubscribed = subscriptionService.IsSubscribed(message.AppId, message.Topic);
+            subscriptionService.Unsubscribe(message.AppId, message.Topic);
+
+            return wasSubscribed
+                ? $"Usuario {message.AppId} eliminado del tema {message.Topic}."
+                : $"El usuario {message.AppId} no estaba suscrito al tema {message.Topic}.";
         }
 
         private string HandlePublish(Message message)
         {
-            bool topicExists = subscriptionService.IsSubscribed(message.AppId, message.Topic);
-            if (!topicExists)
+            var subscribers = subscriptionService.GetSubscribersByTopic(message.Topic);
+            if (subscribers.Count == 0)
             {
                 return $"El tema {message.Topic} no tiene suscriptores o no existe.";
             }
 
-            var subscribers = subscriptionService.GetSubscribersByTopic(message.Topic);
-
             foreach (var subscriber in subscribers)
             {
                 NodoSuscriptor? actual = subscriptionService.GetSubscriber(subscriber);
-                while (actual != null)
+                if (actual != null && message.Content != null)
                 {
-                    if (actual.AppId == subscriber)
-                    {
-                        if (message.Content != null)
-                        {
-                            actual.MessagesQueue.Enqueue(message.Content);
-                            Console.WriteLine($"Mensaje publicado a {subscriber} en el tema {message.Topic}.");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Mensaje vacío publicado a {subscriber} en el tema {message.Topic}.");
-                        }
-                        break;
-                    }
-                    actual = actual.Siguiente;
+                    actual.MessagesQueue.Enqueue(message.Content);
+                    if (debugMode) Console.WriteLine($"Mensaje publicado a {subscriber} en el tema {message.Topic}.");
                 }
             }
 
             DataPersistence.SaveData(new DataStorage { Suscriptores = subscriptionService.GetAllSubscribers() });
-
             return $"Mensaje publicado en el tema {message.Topic}.";
         }
 
         private string HandleReceive(Message message)
         {
-            var subscribers = subscriptionService.GetSubscribersByTopic(message.Topic);
+            NodoSuscriptor? actual = subscriptionService.GetSubscriber(message.AppId);
 
-            if (!subscribers.Contains(message.AppId))
+            if (actual == null || !actual.SubscribedTopics.Contains(message.Topic))
             {
                 return $"El usuario {message.AppId} no está suscrito al tema {message.Topic}.";
             }
 
-            NodoSuscriptor? actual = subscriptionService.GetSubscriber(message.AppId);
-
-            if (actual != null && actual.MessagesQueue.Count > 0)
+            if (actual.MessagesQueue.Count > 0)
             {
                 var receivedMessage = actual.MessagesQueue.Dequeue();
-                Console.WriteLine($"Mensaje recibido por {message.AppId} del tema {message.Topic}: {receivedMessage}");
+                if (debugMode) Console.WriteLine($"Mensaje recibido por {message.AppId} del tema {message.Topic}: {receivedMessage}");
 
                 DataPersistence.SaveData(new DataStorage { Suscriptores = subscriptionService.GetAllSubscribers() });
-
                 return $"Mensaje recibido por {message.AppId} del tema {message.Topic}: {receivedMessage}";
             }
             else
