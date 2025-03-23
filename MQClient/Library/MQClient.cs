@@ -77,6 +77,58 @@ namespace MQClient.Library
             return result;
         }
 
+        public bool Publish(Topic topic, string content)
+        {
+            if (_stream == null)
+            {
+                Console.WriteLine("No hay conexión establecida con el servidor.");
+                return false;
+            }
+
+            if (topic == null || string.IsNullOrWhiteSpace(content))
+            {
+                Console.WriteLine("El topic o el contenido no pueden estar vacíos.");
+                return false;
+            }
+
+            try
+            {
+                var message = new Message("publish", _appId.ToString(), topic.ToString(), content);
+                return SendMessage(message, "publicado");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al publicar en {topic}: {ex.Message}");
+                return false;
+            }
+        }
+
+        public string? Receive(Topic topic)
+        {
+            if (_stream == null)
+            {
+                Console.WriteLine("No hay conexión establecida con el servidor.");
+                return null;
+            }
+
+            if (topic == null)
+            {
+                Console.WriteLine("El topic no puede ser nulo.");
+                return null;
+            }
+
+            try
+            {
+                var message = new Message("receive", _appId.ToString(), topic.ToString());
+                return SendMessageAndReceiveResponse(message);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al recibir mensajes de {topic}: {ex.Message}");
+                return null;
+            }
+        }
+
         private bool SendMessage(Message message, string expectedResponse)
         {
             try
@@ -108,6 +160,39 @@ namespace MQClient.Library
             {
                 Console.WriteLine($"Error al enviar mensaje: {ex.Message}");
                 return false;
+            }
+        }
+
+        private string? SendMessageAndReceiveResponse(Message message)
+        {
+            try
+            {
+                if (_stream == null)
+                {
+                    Console.WriteLine("Error: No hay conexión con el servidor.");
+                    return null;
+                }
+
+                string jsonMessage = JsonSerializer.Serialize(message);
+                byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
+                _stream.Write(data, 0, data.Length);
+                _stream.Flush();
+
+                byte[] buffer = new byte[1024];
+                int bytesRead = _stream.Read(buffer, 0, buffer.Length);
+
+                if (bytesRead == 0)
+                {
+                    Console.WriteLine("No se recibió respuesta del servidor.");
+                    return null;
+                }
+
+                return Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al enviar mensaje: {ex.Message}");
+                return null;
             }
         }
 

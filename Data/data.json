@@ -1,27 +1,3 @@
 {
-  "Suscriptores": [
-    {
-      "AppId": "56633ba8-4ab0-4aac-a723-388f0037c27b",
-      "SubscribedTopics": [
-        "testTopic"
-      ],
-      "MessagesQueue": [],
-      "Siguiente": {
-        "AppId": "4616ec9a-7786-4a76-a1b2-eb57469c9c38",
-        "SubscribedTopics": [
-          "testTopic"
-        ],
-        "MessagesQueue": [],
-        "Siguiente": null
-      }
-    },
-    {
-      "AppId": "4616ec9a-7786-4a76-a1b2-eb57469c9c38",
-      "SubscribedTopics": [
-        "testTopic"
-      ],
-      "MessagesQueue": [],
-      "Siguiente": null
-    }
-  ]
+  "Suscriptores": []
 }
