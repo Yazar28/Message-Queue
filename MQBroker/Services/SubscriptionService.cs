@@ -26,7 +26,7 @@ namespace MQBroker.Services
 
     public class DataPersistence
     {
-        private static readonly string filePath = @"C:\Users\Usuario\OneDrive\Desktop\Programación\Algoritmo y Estructuras de Datos\Proyecto#1\MQBroker\Data\data.json";
+        private static readonly string filePath = @"C:\Users\Usuario\OneDrive\Desktop\Programación\Algoritmo y Estructuras de Datos\Message Queue\Data\data.json";
         private static string FilePath => filePath;
 
         public static void SaveData(DataStorage data)
@@ -39,7 +39,10 @@ namespace MQBroker.Services
                 {
                     Directory.CreateDirectory(directory);
                 }
-                File.WriteAllText(FilePath, JsonSerializer.Serialize(data));
+
+                string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(FilePath, json);
+                Console.WriteLine($"Datos guardados correctamente en {FilePath}");
             }
             catch (IOException ioEx)
             {
@@ -55,8 +58,23 @@ namespace MQBroker.Services
         {
             try
             {
-                if (!File.Exists(FilePath)) return new DataStorage();
-                return JsonSerializer.Deserialize<DataStorage>(File.ReadAllText(FilePath)) ?? new DataStorage();
+                if (!File.Exists(FilePath))
+                {
+                    Console.WriteLine($"No se encontró el archivo de datos ({FilePath}), creando uno nuevo.");
+                    return new DataStorage();
+                }
+
+                string json = File.ReadAllText(FilePath);
+                DataStorage? data = JsonSerializer.Deserialize<DataStorage>(json);
+
+                if (data == null)
+                {
+                    Console.WriteLine($"Error al deserializar {FilePath}, creando uno nuevo.");
+                    return new DataStorage();
+                }
+
+                Console.WriteLine($"Datos cargados correctamente desde {FilePath}");
+                return data;
             }
             catch (IOException ioEx)
             {
@@ -74,8 +92,9 @@ namespace MQBroker.Services
                 return new DataStorage();
             }
         }
-    
+
     }
+
     public class SubscriptionService
     {
         private NodoSuscriptor? cabeza;
