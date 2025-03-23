@@ -6,14 +6,14 @@ using MQClient.Models;
 
 namespace MQClient.Library
 {
-    public class MQClient : IDisposable  
+    public class MQClient : IDisposable
     {
         private readonly string _ip;
         private readonly int _port;
         private readonly Guid _appId;
         private TcpClient? _client;
         private NetworkStream? _stream;
-        private bool _disposed = false; 
+        private bool _disposed = false;
 
         public MQClient(string ip, int port, Guid AppID)
         {
@@ -27,32 +27,93 @@ namespace MQClient.Library
                 _client = new TcpClient();
                 _client.Connect(_ip, _port);
                 _stream = _client.GetStream();
-
                 Console.WriteLine($"Conectado a {_ip}:{_port} con AppID {_appId}");
-
-                var message = new Message("publish", _appId.ToString(), "testTopic", "Hola, soy MQClient!");
-                string jsonMessage = JsonSerializer.Serialize(message);
-                byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
-
-                _stream.Write(data, 0, data.Length);
-                Console.WriteLine("[MQClient] Mensaje de prueba enviado.");
-
-                byte[] buffer = new byte[1024];
-                int bytesRead = _stream.Read(buffer, 0, buffer.Length);
-                string response = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine($"[MQClient] Respuesta del servidor: {response}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[MQClient] Error al conectar con el servidor: {ex.Message}");
+                Console.WriteLine($"Error al conectar con el servidor: {ex.Message}");
                 _client?.Close();
                 _client = null;
             }
         }
 
+        public bool Subscribe(Topic topic)
+        {
+            if (_stream == null)
+            {
+                Console.WriteLine("No hay conexión establecida con el servidor.");
+                return false;
+            }
+
+            if (topic == null)
+            {
+                Console.WriteLine("El topic no puede ser nulo.");
+                return false;
+            }
+
+            return SendMessage(new Message("subscribe", _appId.ToString(), topic.ToString()), "suscrito");
+        }
+
+        public bool Unsubscribe(Topic topic)
+        {
+            if (_stream == null)
+            {
+                Console.WriteLine("No hay conexión establecida con el servidor.");
+                return false;
+            }
+
+            if (topic == null)
+            {
+                Console.WriteLine("El topic no puede ser nulo.");
+                return false;
+            }
+
+            bool result = SendMessage(new Message("unsubscribe", _appId.ToString(), topic.ToString()), "eliminado");
+
+            Console.WriteLine(result
+                ? $"Desuscripción exitosa de '{topic}'."
+                : $"No se pudo desuscribir de '{topic}' porque el usuario no estaba suscrito.");
+
+            return result;
+        }
+
+        private bool SendMessage(Message message, string expectedResponse)
+        {
+            try
+            {
+                if (_stream == null)
+                {
+                    Console.WriteLine("Error: No hay conexión con el servidor.");
+                    return false;
+                }
+
+                string jsonMessage = JsonSerializer.Serialize(message);
+                byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
+                _stream.Write(data, 0, data.Length);
+                _stream.Flush();
+
+                byte[] buffer = new byte[1024];
+                int bytesRead = _stream.Read(buffer, 0, buffer.Length);
+
+                if (bytesRead == 0)
+                {
+                    Console.WriteLine("No se recibió respuesta del servidor.");
+                    return false;
+                }
+
+                string response = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                return response.Contains(expectedResponse);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al enviar mensaje: {ex.Message}");
+                return false;
+            }
+        }
+
         public void Close()
         {
-            Dispose();  
+            Dispose();
         }
 
         public void Dispose()
@@ -61,14 +122,9 @@ namespace MQClient.Library
             {
                 _stream?.Close();
                 _client?.Close();
-                Console.WriteLine("[MQClient] Conexión cerrada.");
+                Console.WriteLine("Conexión cerrada.");
                 _disposed = true;
             }
-        }
-
-        ~MQClient()
-        {
-            Dispose();
         }
     }
 }

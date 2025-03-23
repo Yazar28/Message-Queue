@@ -13,7 +13,6 @@ namespace MQBroker.Networking
         private TcpListener server;
         private const int Port = 5000;
         private readonly SubscriptionService subscriptionService;
-        private static readonly bool debugMode = true; 
 
         public BrokerServer()
         {
@@ -29,11 +28,6 @@ namespace MQBroker.Networking
             while (true)
             {
                 TcpClient client = server.AcceptTcpClient();
-                if (debugMode)
-                {
-                    var remoteEndPoint = client.Client.RemoteEndPoint as System.Net.IPEndPoint;
-                    Console.WriteLine($"Cliente conectado desde {remoteEndPoint?.Address ?? System.Net.IPAddress.None}");
-                }
                 Task.Run(() => HandleClient(client));
             }
         }
@@ -44,39 +38,34 @@ namespace MQBroker.Networking
             {
                 NetworkStream stream = client.GetStream();
                 byte[] buffer = new byte[1024];
-                int bytesRead = stream.Read(buffer, 0, buffer.Length);
 
-                if (bytesRead == 0)
+                while (true)
                 {
-                    if (debugMode) Console.WriteLine("Cliente desconectado sin enviar datos.");
-                    return;
+                    int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                    if (bytesRead == 0) break;
+
+                    string requestJson = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Message? message;
+                    try
+                    {
+                        message = JsonSerializer.Deserialize<Message>(requestJson);
+                    }
+                    catch (JsonException)
+                    {
+                        continue;
+                    }
+
+                    string response = message != null ? ProcessMessage(message) : "Error: JSON no válido.";
+                    byte[] responseData = Encoding.UTF8.GetBytes(response);
+                    stream.Write(responseData, 0, responseData.Length);
+                    stream.Flush();
                 }
-
-                string requestJson = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                if (debugMode) Console.WriteLine($"Mensaje recibido: {requestJson}");
-
-                Message? message;
-                try
-                {
-                    message = JsonSerializer.Deserialize<Message>(requestJson);
-                }
-                catch (JsonException ex)
-                {
-                    if (debugMode) Console.WriteLine($"Error de deserialización: {ex.Message}\nJSON defectuoso: {requestJson}");
-                    message = null;
-                }
-
-                string response = message != null ? ProcessMessage(message) : "Error: JSON no válido.";
-                byte[] responseData = Encoding.UTF8.GetBytes(response);
-                stream.Write(responseData, 0, responseData.Length);
-
-                if (debugMode) Console.WriteLine($"Respuesta enviada: {response}");
 
                 client.Close();
             }
             catch (Exception ex)
             {
-                if (debugMode) Console.WriteLine($"Error al manejar cliente: {ex.Message}");
+                Console.WriteLine($"Error al manejar cliente: {ex.Message}");
             }
         }
 
@@ -95,7 +84,6 @@ namespace MQBroker.Networking
         private string HandleSubscribe(Message message)
         {
             bool wasAlreadySubscribed = subscriptionService.IsSubscribed(message.AppId, message.Topic);
-
             subscriptionService.Subscribe(message.AppId, message.Topic);
 
             return wasAlreadySubscribed
@@ -127,7 +115,6 @@ namespace MQBroker.Networking
                 if (actual != null && message.Content != null)
                 {
                     actual.MessagesQueue.Enqueue(message.Content);
-                    if (debugMode) Console.WriteLine($"Mensaje publicado a {subscriber} en el tema {message.Topic}.");
                 }
             }
 
@@ -138,7 +125,6 @@ namespace MQBroker.Networking
         private string HandleReceive(Message message)
         {
             NodoSuscriptor? actual = subscriptionService.GetSubscriber(message.AppId);
-
             if (actual == null || !actual.SubscribedTopics.Contains(message.Topic))
             {
                 return $"El usuario {message.AppId} no está suscrito al tema {message.Topic}.";
@@ -147,8 +133,6 @@ namespace MQBroker.Networking
             if (actual.MessagesQueue.Count > 0)
             {
                 var receivedMessage = actual.MessagesQueue.Dequeue();
-                if (debugMode) Console.WriteLine($"Mensaje recibido por {message.AppId} del tema {message.Topic}: {receivedMessage}");
-
                 DataPersistence.SaveData(new DataStorage { Suscriptores = subscriptionService.GetAllSubscribers() });
                 return $"Mensaje recibido por {message.AppId} del tema {message.Topic}: {receivedMessage}";
             }
