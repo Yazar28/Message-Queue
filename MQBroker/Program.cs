@@ -28,17 +28,32 @@ class Program
 
         var topic = new Topic("testTopic");
 
-        if (client.Unsubscribe(topic))
-            Console.WriteLine($"Desuscripción exitosa de '{topic}'");
-        else
-            Console.WriteLine($"No se pudo desuscribir de '{topic}'");
-
-        Thread.Sleep(2000);
-
         if (client.Subscribe(topic))
             Console.WriteLine($"Suscripción exitosa a '{topic}'");
         else
             Console.WriteLine($"No se pudo suscribir a '{topic}'");
+
+        Thread.Sleep(2000);
+
+        if (client.Publish(topic, "¡Mensaje de prueba desde MQClient!"))
+            Console.WriteLine($"Mensaje publicado en '{topic}'");
+        else
+            Console.WriteLine($"No se pudo publicar en '{topic}'");
+
+        Thread.Sleep(2000);
+
+        string? receivedMessage = client.Receive(topic);
+        if (receivedMessage != null)
+            Console.WriteLine($"Mensaje recibido en '{topic}': {receivedMessage}");
+        else
+            Console.WriteLine($"No se recibieron mensajes en '{topic}'");
+
+        Thread.Sleep(2000);
+
+        if (client.Unsubscribe(topic))
+            Console.WriteLine($"Desuscripción exitosa de '{topic}'");
+        else
+            Console.WriteLine($"No se pudo desuscribir de '{topic}'");
 
         Console.WriteLine("MQClient se ejecutó correctamente.");
         Console.WriteLine("Presiona Enter para salir...");
