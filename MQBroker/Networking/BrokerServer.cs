@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using MQBroker.Models;
+using MQClient.Models;
 using MQBroker.Services;
 
 namespace MQBroker.Networking
@@ -17,7 +17,7 @@ namespace MQBroker.Networking
 
         public BrokerServer()
         {
-            server = new TcpListener(IPAddress.Any, Port);
+            server = new TcpListener(IPAddress.Parse("127.0.0.1"), Port);
             subscriptionService = new SubscriptionService();
         }
 
@@ -29,7 +29,11 @@ namespace MQBroker.Networking
             while (true)
             {
                 TcpClient client = server.AcceptTcpClient();
-                if (debugMode) Console.WriteLine("Cliente conectado...");
+                if (debugMode)
+                {
+                    var remoteEndPoint = client.Client.RemoteEndPoint as System.Net.IPEndPoint;
+                    Console.WriteLine($"Cliente conectado desde {remoteEndPoint?.Address ?? System.Net.IPAddress.None}");
+                }
                 Task.Run(() => HandleClient(client));
             }
         }
