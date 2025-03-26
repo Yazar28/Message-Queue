@@ -39,7 +39,7 @@ namespace MessageQueueGUI
             }
             Topic topic = new Topic(tema);
             bool result = mqClient.Subscribe(topic);
-            MessageBox.Show(result ? $"Suscrito al tema '{tema}'." : $"No se pudo suscribir al tema '{tema}'.");
+            MessageBox.Show(result ? $"Suscrito al tema '{tema}'." : $"Ya es suscrito al tema '{tema}'.");
         }
 
         private void btnDesuscribirse_Click(object sender, EventArgs e)
@@ -56,7 +56,7 @@ namespace MessageQueueGUI
                 return;
             }
             bool result = mqClient.Unsubscribe(new Topic(tema));
-            MessageBox.Show(result ? $"Desuscrito del tema '{tema}'." : $"No se pudo desuscribir del tema '{tema}'.");
+            MessageBox.Show(result ? $"Desuscrito del tema '{tema}'." : $"No se pudo desuscribir al tema '{tema}' porque no existe.");
         }
 
         private void btnPublicar_Click(object sender, EventArgs e)

@@ -41,17 +41,15 @@ namespace MQClient.Library
         {
             if (_stream == null)
             {
-                Console.WriteLine("No hay conexión establecida con el servidor.");
                 return false;
             }
-
             if (topic == null)
             {
-                Console.WriteLine("El topic no puede ser nulo.");
                 return false;
             }
-
-            return SendMessage(new Message("subscribe", _appId.ToString(), topic.ToString()), "suscrito");
+            Message message = new Message("subscribe", _appId.ToString(), topic.ToString());
+            string jsonMessage = JsonSerializer.Serialize(message);
+            return SendMessage(message, "Suscripción exitosa");
         }
 
         public bool Unsubscribe(Topic topic)

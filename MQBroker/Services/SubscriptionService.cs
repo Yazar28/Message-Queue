@@ -126,15 +126,14 @@ namespace MQBroker.Services
             return cabeza;
         }
 
-        public void Subscribe(string appId, string topic)
+        public bool Subscribe(string appId, string topic)
         {
             NodoSuscriptor? suscriptor = GetSubscriber(appId);
             if (suscriptor != null)
             {
                 if (suscriptor.SubscribedTopics.Contains(topic))
                 {
-                    Console.WriteLine($"El usuario {appId} ya está suscrito al tema {topic}.");
-                    return;
+                    return false;
                 }
                 suscriptor.SubscribedTopics.Add(topic);
             }
@@ -144,6 +143,7 @@ namespace MQBroker.Services
                 cabeza.SubscribedTopics.Add(topic);
             }
             DataPersistence.SaveData(new DataStorage { Suscriptores = GetAllSubscribers() });
+            return true;
         }
 
         public void Unsubscribe(string appId, string topic)
@@ -217,9 +217,7 @@ namespace MQBroker.Services
             while (actual != null)
             {
                 if (actual.AppId == appId)
-                {
                     return actual;
-                }
                 actual = actual.Siguiente;
             }
             return null;

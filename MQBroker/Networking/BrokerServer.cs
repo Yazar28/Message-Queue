@@ -83,12 +83,9 @@ namespace MQBroker.Networking
 
         private string HandleSubscribe(Message message)
         {
-            bool wasAlreadySubscribed = subscriptionService.IsSubscribed(message.AppId, message.Topic);
-            subscriptionService.Subscribe(message.AppId, message.Topic);
-
-            return wasAlreadySubscribed
-                ? $"El usuario {message.AppId} ya estaba suscrito al tema {message.Topic}."
-                : $"Usuario {message.AppId} suscrito al tema {message.Topic}.";
+            bool newSubscription = subscriptionService.Subscribe(message.AppId, message.Topic);
+            string response = newSubscription ? "Suscripción exitosa" : "Ya suscrito";
+            return response;
         }
 
         private string HandleUnsubscribe(Message message)

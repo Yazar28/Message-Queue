@@ -1,3 +1,12 @@
 {
-  "Suscriptores": []
+  "Suscriptores": [
+    {
+      "AppId": "3d6c5fbc-3d26-4ca7-9110-dd07c7f6d10b",
+      "SubscribedTopics": [
+        "Juegos"
+      ],
+      "MessagesQueue": [],
+      "Siguiente": null
+    }
+  ]
 }
